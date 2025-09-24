@@ -1,0 +1,389 @@
+syntax = "proto3";
+
+package repocontext.v1;
+
+option go_package = "github.com/repo-context-service/proto/gen/repocontext/v1;repocontextv1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// UploadService handles repository uploads and ingestion
+service UploadService {
+  // Upload a repository via file or Git URL (streaming)
+  rpc UploadRepository(stream UploadRepositoryRequest) returns (UploadRepositoryResponse) {
+    // Note: gRPC streaming only - no HTTP mapping
+  }
+
+  // Upload a Git repository via HTTP
+  rpc UploadGitRepository(UploadGitRepositoryRequest) returns (UploadRepositoryResponse) {
+    option (google.api.http) = {
+      post: "/v1/upload/git"
+      body: "*"
+    };
+  }
+
+  // Get upload and ingestion status
+  rpc GetUploadStatus(GetUploadStatusRequest) returns (GetUploadStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/upload/{upload_id}/status"
+    };
+  }
+}
+
+// ChatService provides repository-specific chat functionality
+service ChatService {
+  // Chat with a repository using streaming responses
+  rpc ChatWithRepository(stream ChatRequest) returns (stream ChatResponse) {
+    // Note: bidirectional streaming - gRPC only, no HTTP mapping
+  }
+}
+
+// RepositoryService manages uploaded repositories
+service RepositoryService {
+  // List uploaded repositories
+  rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse) {
+    option (google.api.http) = {
+      get: "/v1/repositories"
+    };
+  }
+
+  // Get repository details
+  rpc GetRepository(GetRepositoryRequest) returns (GetRepositoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/repositories/{repository_id}"
+    };
+  }
+
+  // Delete a repository
+  rpc DeleteRepository(DeleteRepositoryRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1/repositories/{repository_id}"
+    };
+  }
+}
+
+// HealthService provides health checks
+service HealthService {
+  rpc Check(google.protobuf.Empty) returns (HealthCheckResponse) {
+    option (google.api.http) = {
+      get: "/health"
+    };
+  }
+
+  rpc Ping(google.protobuf.Empty) returns (PingResponse) {
+    option (google.api.http) = {
+      get: "/ping"
+    };
+  }
+}
+
+// Upload Messages
+message UploadRepositoryRequest {
+  oneof source {
+    FileUpload file_upload = 1;
+    GitRepository git_repository = 2;
+  }
+
+  string tenant_id = 3;
+  string idempotency_key = 4;
+  UploadOptions options = 5;
+}
+
+message UploadGitRepositoryRequest {
+  GitRepository git_repository = 1;
+  string tenant_id = 2;
+  string idempotency_key = 3;
+  UploadOptions options = 4;
+}
+
+message FileUpload {
+  string filename = 1;
+  bytes chunk = 2;
+  bool is_final = 3;
+}
+
+message GitRepository {
+  string url = 1;
+  string ref = 2; // branch, tag, or commit
+  GitCredentials credentials = 3;
+}
+
+message GitCredentials {
+  string username = 1;
+  string password = 2; // or token
+}
+
+message UploadOptions {
+  repeated string include_patterns = 1;
+  repeated string exclude_patterns = 2;
+  int32 max_file_size_mb = 3;
+  bool skip_binaries = 4;
+}
+
+message UploadRepositoryResponse {
+  string upload_id = 1;
+  string repository_id = 2;
+  google.protobuf.Timestamp accepted_at = 3;
+  IngestionStatus status = 4;
+}
+
+message GetUploadStatusRequest {
+  string upload_id = 1;
+  string tenant_id = 2;
+}
+
+message GetUploadStatusResponse {
+  string upload_id = 1;
+  string repository_id = 2;
+  IngestionStatus status = 3;
+  IngestionProgress progress = 4;
+  string error_message = 5;
+}
+
+message IngestionStatus {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_PENDING = 1;
+    STATE_EXTRACTING = 2;
+    STATE_CHUNKING = 3;
+    STATE_EMBEDDING = 4;
+    STATE_INDEXING = 5;
+    STATE_READY = 6;
+    STATE_FAILED = 7;
+  }
+  State state = 1;
+  google.protobuf.Timestamp updated_at = 2;
+}
+
+message IngestionProgress {
+  int32 total_files = 1;
+  int32 processed_files = 2;
+  int32 total_chunks = 3;
+  int32 embedded_chunks = 4;
+  int32 indexed_chunks = 5;
+  float progress_percent = 6;
+}
+
+// Chat Messages
+message ChatRequest {
+  oneof message {
+    ChatStart start = 1;
+    ChatMessage chat_message = 2;
+    ChatCancel cancel = 3;
+  }
+}
+
+message ChatStart {
+  string repository_id = 1;
+  string tenant_id = 2;
+  ChatOptions options = 3;
+}
+
+message ChatMessage {
+  string query = 1;
+  string session_id = 2;
+  SearchFilters filters = 3;
+}
+
+message ChatCancel {
+  string session_id = 1;
+}
+
+message ChatOptions {
+  int32 max_results = 1;
+  bool stream_tokens = 2;
+  string model = 3;
+}
+
+message SearchFilters {
+  repeated string languages = 1;
+  repeated string file_patterns = 2;
+  string path_prefix = 3;
+}
+
+message ChatResponse {
+  oneof message {
+    SearchStarted search_started = 1;
+    SearchHit search_hit = 2;
+    CompositionStarted composition_started = 3;
+    CompositionToken composition_token = 4;
+    CompositionComplete composition_complete = 5;
+    ChatError error = 6;
+    ChatComplete complete = 7;
+  }
+}
+
+message SearchStarted {
+  string session_id = 1;
+  string query_id = 2;
+}
+
+message SearchHit {
+  string session_id = 1;
+  string query_id = 2;
+  HitPhase phase = 3;
+  int32 rank = 4;
+  CodeChunk chunk = 5;
+}
+
+message CompositionStarted {
+  string session_id = 1;
+  string query_id = 2;
+  int32 context_chunks = 3;
+}
+
+message CompositionToken {
+  string session_id = 1;
+  string query_id = 2;
+  string text = 3;
+}
+
+message CompositionComplete {
+  string session_id = 1;
+  string query_id = 2;
+  string full_response = 3;
+  repeated Citation citations = 4;
+}
+
+message ChatError {
+  string session_id = 1;
+  string error_code = 2;
+  string error_message = 3;
+}
+
+message ChatComplete {
+  string session_id = 1;
+  string query_id = 2;
+  SearchTimings timings = 3;
+  SearchStats stats = 4;
+}
+
+enum HitPhase {
+  HIT_PHASE_UNSPECIFIED = 0;
+  HIT_PHASE_EARLY = 1;
+  HIT_PHASE_FINAL = 2;
+}
+
+enum SearchSource {
+  SEARCH_SOURCE_UNSPECIFIED = 0;
+  SEARCH_SOURCE_LEXICAL = 1;
+  SEARCH_SOURCE_SEMANTIC = 2;
+  SEARCH_SOURCE_MERGED = 3;
+}
+
+message CodeChunk {
+  string repository_id = 1;
+  string file_path = 2;
+  int32 start_line = 3;
+  int32 end_line = 4;
+  string content = 5;
+  float score = 6;
+  SearchSource source = 7;
+  string language = 8;
+  string symbol = 9;
+}
+
+message Citation {
+  string file_path = 1;
+  int32 line_number = 2;
+  string excerpt = 3;
+}
+
+message SearchTimings {
+  int32 lexical_ms = 1;
+  int32 semantic_ms = 2;
+  int32 merge_ms = 3;
+  int32 composition_ms = 4;
+  bool cache_hit = 5;
+}
+
+message SearchStats {
+  int32 lexical_candidates = 1;
+  int32 semantic_candidates = 2;
+  int32 merged_results = 3;
+  bool results_truncated = 4;
+}
+
+// Repository Messages
+message ListRepositoriesRequest {
+  string tenant_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListRepositoriesResponse {
+  repeated Repository repositories = 1;
+  string next_page_token = 2;
+}
+
+message GetRepositoryRequest {
+  string repository_id = 1;
+  string tenant_id = 2;
+}
+
+message GetRepositoryResponse {
+  Repository repository = 1;
+}
+
+message DeleteRepositoryRequest {
+  string repository_id = 1;
+  string tenant_id = 2;
+}
+
+message Repository {
+  string repository_id = 1;
+  string name = 2;
+  string description = 3;
+  RepositorySource source = 4;
+  IngestionStatus ingestion_status = 5;
+  RepositoryStats stats = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message RepositorySource {
+  oneof source {
+    string git_url = 1;
+    string uploaded_filename = 2;
+  }
+  string ref = 3;
+  string commit_sha = 4;
+}
+
+message RepositoryStats {
+  int32 total_files = 1;
+  int32 total_lines = 2;
+  int32 total_chunks = 3;
+  int64 size_bytes = 4;
+  repeated LanguageStats languages = 5;
+}
+
+message LanguageStats {
+  string language = 1;
+  int32 file_count = 2;
+  int32 line_count = 3;
+}
+
+// Health Messages
+message HealthCheckResponse {
+  enum ServingStatus {
+    SERVING_STATUS_UNSPECIFIED = 0;
+    SERVING_STATUS_SERVING = 1;
+    SERVING_STATUS_NOT_SERVING = 2;
+    SERVING_STATUS_SERVICE_UNKNOWN = 3;
+  }
+  ServingStatus status = 1;
+  repeated ComponentHealth components = 2;
+}
+
+message ComponentHealth {
+  string name = 1;
+  HealthCheckResponse.ServingStatus status = 2;
+  string message = 3;
+}
+
+message PingResponse {
+  string message = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
