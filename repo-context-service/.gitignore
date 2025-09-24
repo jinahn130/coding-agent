@@ -1,0 +1,4 @@
+*.DS_Store
+.env
+/repo-context-service/.env
+/repo-context-service/Claude.md
