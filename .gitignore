@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Env files (keep examples)
+.env
+**/.env
+*.env.local
+!.env.example
+!**/.env.example
+
+# Project-specific
+/repo-context-service/.env
+/repo-context-service/CLAUDE.md
+
+# Build / binaries / local artifacts
+/repo-context-service/build/
+/repo-context-service/apiserver
+/repo-context-service/test-build
+
+# Runtime data (don’t commit local repos/data)
+# Remove if you actually intend to version these sample fixtures
+/repo-context-service/deploy/data/
+
+# Go niceties (optional)
+/bin/
+/dist/
+*.out
+*.exe
+coverage/
