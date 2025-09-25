@@ -114,7 +114,7 @@ func (r *RipgrepClient) buildRipgrepArgs(query string, limit int, filters map[st
 		"--context", "2",      // Include 2 lines of context before/after
 		"--max-count", strconv.Itoa(r.maxMatches), // Limit matches per file
 		"--smart-case",        // Smart case matching
-		"--type-not", "binary", // Exclude binary files
+		// Binary files are automatically skipped by ripgrep by default
 	}
 
 	// Add language filters
