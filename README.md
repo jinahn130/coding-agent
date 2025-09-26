@@ -3,7 +3,7 @@
 Go gRPC orchestration and coding agent service where you can upload your repository and get an AI powered chatbot that understsands your code using dual search backends (lexical + semantic) and LLM composition.
 
 ![alt text](/repo-context-service/images/image.png)
-
+![alt text](/repo-context-service/images/image4.png)
 ## Architectural Diagram and Key Components
 
 ![alt text](/repo-context-service/images/image2.png)
