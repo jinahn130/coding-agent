@@ -156,22 +156,111 @@ func (r *RipgrepClient) queryToRegex(query string) (string, error) {
 		return "", fmt.Errorf("empty query")
 	}
 
-	// Escape special regex characters in each term
-	var escapedTerms []string
+	var patterns []string
+
 	for _, term := range terms {
-		escaped := regexp.QuoteMeta(term)
-		escapedTerms = append(escapedTerms, escaped)
+		term = strings.ToLower(term)
+
+		// Create multiple patterns for fuzzy matching
+		var termPatterns []string
+
+		// 1. Exact match (literal)
+		exactPattern := "(?i)" + regexp.QuoteMeta(term)
+		termPatterns = append(termPatterns, exactPattern)
+
+		// 2. Partial word match (term contained in larger words)
+		if len(term) >= 3 {
+			partialPattern := "(?i)\\w*" + regexp.QuoteMeta(term) + "\\w*"
+			termPatterns = append(termPatterns, partialPattern)
+		}
+
+		// 3. Fuzzy matching for common abbreviations and variations
+		fuzzyPatterns := r.generateFuzzyPatterns(term)
+		termPatterns = append(termPatterns, fuzzyPatterns...)
+
+		// Combine all patterns for this term with OR logic
+		if len(termPatterns) > 1 {
+			patterns = append(patterns, "("+strings.Join(termPatterns, "|")+")")
+		} else {
+			patterns = append(patterns, termPatterns[0])
+		}
 	}
 
-	// Create pattern that matches any of the terms (OR logic)
-	if len(escapedTerms) == 1 {
-		return escapedTerms[0], nil
+	// Combine all term patterns with OR logic
+	if len(patterns) == 1 {
+		return patterns[0], nil
 	}
 
-	// For multiple terms, create an OR pattern
-	pattern := "(" + strings.Join(escapedTerms, "|") + ")"
+	return "(" + strings.Join(patterns, "|") + ")", nil
+}
 
-	return pattern, nil
+func (r *RipgrepClient) generateFuzzyPatterns(term string) []string {
+	var patterns []string
+
+	// Common tech abbreviations and expansions
+	fuzzyMap := map[string][]string{
+		"auth":           {"authentication", "authorization", "authorize", "authenticated", "authenticator"},
+		"authentication": {"auth", "authenticator", "authenticate"},
+		"authorization":  {"auth", "authorize", "authz"},
+		"config":         {"configuration", "configure", "conf"},
+		"configuration":  {"config", "conf"},
+		"db":             {"database", "data_base"},
+		"database":       {"db", "data_base"},
+		"api":            {"endpoint", "service", "rest", "graphql"},
+		"endpoint":       {"api", "route", "handler"},
+		"handler":        {"handle", "controller", "processor"},
+		"service":        {"svc", "server", "api"},
+		"server":         {"srv", "service", "daemon"},
+		"client":         {"cli", "consumer"},
+		"response":       {"resp", "result", "reply"},
+		"request":        {"req", "query", "input"},
+		"error":          {"err", "exception", "failure"},
+		"function":       {"func", "method", "procedure"},
+		"method":         {"func", "function"},
+		"variable":       {"var", "field", "property"},
+		"parameter":      {"param", "arg", "argument"},
+		"middleware":     {"middleware", "interceptor", "filter"},
+		"route":          {"router", "routing", "path"},
+		"controller":     {"ctrl", "handler", "processor"},
+		"model":          {"schema", "entity", "data"},
+		"view":           {"template", "render", "display"},
+		"user":           {"users", "account", "profile"},
+		"password":       {"pwd", "pass", "secret"},
+		"token":          {"jwt", "bearer", "session"},
+		"session":        {"sess", "cookie", "token"},
+	}
+
+	// Add fuzzy matches if term exists in map
+	if expansions, exists := fuzzyMap[term]; exists {
+		for _, expansion := range expansions {
+			pattern := "(?i)" + regexp.QuoteMeta(expansion)
+			patterns = append(patterns, pattern)
+		}
+	}
+
+	// Also check if term is an expansion of something
+	for key, expansions := range fuzzyMap {
+		for _, expansion := range expansions {
+			if expansion == term {
+				pattern := "(?i)" + regexp.QuoteMeta(key)
+				patterns = append(patterns, pattern)
+				break
+			}
+		}
+	}
+
+	// Camel case fuzzy matching - if term could be part of camelCase
+	if len(term) >= 3 {
+		// Match camelCase variations: authHandler, AuthService, etc.
+		camelPattern := "(?i)" + regexp.QuoteMeta(strings.Title(term)) + "[A-Z]\\w*"
+		patterns = append(patterns, camelPattern)
+
+		// Match snake_case variations: auth_handler, user_auth, etc.
+		snakePattern := "(?i)\\w*_?" + regexp.QuoteMeta(term) + "_?\\w*"
+		patterns = append(patterns, snakePattern)
+	}
+
+	return patterns
 }
 
 func (r *RipgrepClient) parseRipgrepOutput(output []byte, repoID, query string) ([]*repocontextv1.CodeChunk, error) {

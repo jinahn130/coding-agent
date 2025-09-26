@@ -11,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/gorilla/mux"
 	"repo-context-service/internal/api"
 	"repo-context-service/internal/cache"
 	"repo-context-service/internal/composer"
@@ -22,6 +20,9 @@ import (
 	"repo-context-service/internal/observability"
 	"repo-context-service/internal/query"
 	repocontextv1 "repo-context-service/proto/gen/repocontext/v1"
+
+	"github.com/gorilla/mux"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -248,6 +249,12 @@ func createHTTPServer(
 	// if err := repocontextv1.RegisterChatServiceHandlerFromEndpoint(ctx, gwMux, grpcEndpoint, opts); err != nil {
 	// 	log.Fatalf("Failed to register chat service handler: %v", err)
 	// }
+	/*
+		Why ChatService is excluded from gRPC-Gateway:
+		- gRPC-Gateway can't handle bidirectional streaming
+		- Chat requires real-time token-by-token streaming
+		- WebSocket provides better user experience for chat
+	*/
 
 	if err := repocontextv1.RegisterHealthServiceHandlerFromEndpoint(ctx, gwMux, grpcEndpoint, opts); err != nil {
 		log.Fatalf("Failed to register health service handler: %v", err)
@@ -389,4 +396,3 @@ func joinStrings(slice []string, separator string) string {
 	}
 	return result
 }
-

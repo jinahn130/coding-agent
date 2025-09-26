@@ -1,19 +1,37 @@
 # Repository Context + Coding Agent Service
 
-A gRPC-first service that provides intelligent repository Q&A through a simple upload-once workflow. Upload any repository and get an AI-powered chatbot that understands your code using dual search backends (lexical + semantic) and LLM composition.
+Go gRPC orchestration and coding agent service where you can upload your repository and get an AI powered chatbot that understsands your code using dual search backends (lexical + semantic) and LLM composition.
 
-## Features
+![alt text](image.png)
 
-🚀 **Simple Repository Q&A**: Upload repositories once and ask questions about your code
-🔍 **Dual Search**: Combines lexical (ripgrep) and semantic (Weaviate + OpenAI embeddings) search
-⚡ **Real-time Chat**: WebSocket-powered streaming responses with early search hits + progressive LLM composition
-💬 **Interactive UI**: Full-featured web chat interface with repository selection and streaming responses
-🏗️ **gRPC-First**: Full gRPC API with HTTP gateway, WebSocket bridge, and web UI
-📦 **Multi-Repository**: Manage and chat with multiple uploaded repositories simultaneously
-🐳 **Local Deployment**: Complete Docker Compose setup - no cloud dependencies required
-🏠 **Self-Contained**: Local Weaviate instance for vector storage and Redis for caching
-📊 **Built-in Monitoring**: Prometheus metrics, Jaeger tracing, Grafana dashboards
+## Key Components
 
+### 🔍 Search
+- **Ripgrep** – lexical search  
+- **Weaviate + OpenAI embeddings** – semantic search  
+
+### 🏗️ APIs & Protocols
+- **gRPC** – primary API  
+- **HTTP Gateway** – REST compatibility  
+- **WebSocket Bridge** – streaming responses  
+
+### 💬 Frontend
+- **Web Chat UI** – repository selection & Q&A  
+- **Real-time Streaming** – early search hits + progressive LLM output  
+
+### ⚙️ Backend
+- **Multi-Repository Management** – query multiple repos at once  
+- **Redis** – caching layer  
+- **Weaviate** – vector storage  
+
+### 🐳 Deployment
+- **Docker Compose** – local development & deployment  
+- **Self-contained stack** – no external cloud dependencies required  
+
+### 📊 Monitoring & Observability
+- **Prometheus** – metrics collection  
+- **Jaeger** – distributed tracing  
+- **Grafana** – dashboards & visualization  
 ## Architecture
 
 ```
@@ -43,6 +61,43 @@ A gRPC-first service that provides intelligent repository Q&A through a simple u
                                          └─────────────┘ └──────────────┘
 ```
 
+## 📖 Key files
+
+Once you upload the repository, the gateway triggers gRPC for the ingestion pipeline. When the user searches a query, that starts the dual search engine, composition using Deepseek, and the results from Deepseek is streamed using the Websocket.
+
+Ingestion pipeline divides the repository code into chunks and uses openAI embeddings API to create vectors. This vector is saved to the weaviate DB locally (free since weaviate is open source) and the vectors are later used to handle user queries. 
+
+### System Understanding
+1. **[README.md](README.md)** - Project overview, setup, and basic usage
+2. **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design, component interactions, concurrency patterns
+3. **[INTEGRATION_TESTING.md](INTEGRATION_TESTING.md)** - Complete testing workflow and validation
+
+### Core Implementation
+4. **[cmd/apiserver/main.go](cmd/apiserver/main.go)** - Application entry point and dependency injection
+5. **[internal/api/websocket.go](internal/api/websocket.go)** - WebSocket↔gRPC bridge (bidirectional streaming)
+6. **[internal/api/chat.go](internal/api/chat.go)** - Chat service with dual search implementation
+7. **[internal/query/merge.go](internal/query/merge.go)** - Result merging and ranking algorithms
+
+### Specialized Systems
+8. **[internal/ingest/inline.go](internal/ingest/inline.go)** - Repository processing pipeline
+9. **[SEMANTIC_SEARCH.md](SEMANTIC_SEARCH.md)** - Vector search deep dive with OpenAI + Weaviate
+10. **[internal/query/lexical_rg.go](internal/query/lexical_rg.go)** - Ripgrep integration with fuzzy matching
+11. **[internal/cache/redis.go](internal/cache/redis.go)** - Multi-layer caching strategy
+
+### Protocol and Configuration
+12. **[proto/repocontext/v1/](proto/repocontext/v1/)** - Protocol buffer definitions
+13. **[deploy/docker-compose.dev.yml](deploy/docker-compose.dev.yml)** - Service orchestration
+14. **[internal/config/config.go](internal/config/config.go)** - Configuration management
+
+### 🎓 Advanced Topics
+These below topics are are covered in ARCHITECTURE.md, SEMANTIC_SEARCH.md, and INTEGRATION_TESTING.md
+- **Concurrency Patterns**: Focus on WebSocket bridge, dual search coordination, pipeline processing
+- **Protocol Translation**: HTTP/WebSocket/gRPC bridges and data transformation
+- **Performance Optimization**: Caching strategies, embedding batching, vector search tuning
+- **Observability**: Metrics collection, tracing, health checks
+
+
+
 ## Quick Start
 
 ### Prerequisites
@@ -51,7 +106,7 @@ A gRPC-first service that provides intelligent repository Q&A through a simple u
 - OpenAI API key (for embeddings)
 - DeepSeek API key (for chat responses)
 
-### 1. Clone and Configure
+### 1. Clone + Configure + Setup
 
 ```bash
 git clone <repository-url>
@@ -60,6 +115,10 @@ cd repo-context-service
 # Copy and configure environment
 cp .env.example .env
 # Edit .env with your API keys
+
+# for first-time development setup. Check Makefile for detail
+# Runs the proto, etc
+make setup
 ```
 
 ### 2. Set Required Environment Variables
@@ -122,13 +181,13 @@ open http://localhost:3000
      - "Find all error handling patterns"
      - "Explain the main application architecture"
    - **Advanced Features**:
-     - Early search hits shown while LLM composes response
+     - Early search hits using fuzzy matching (ripgrep) while LLM composes response
      - Code citations with file paths and line numbers
      - Dual search combines exact matches + semantic understanding
      - WebSocket streaming for real-time interaction
 
 ### API Examples
-
+---
 #### Upload a Git Repository
 
 ```bash
@@ -223,9 +282,7 @@ ws.onmessage = (event) => {
 };
 ```
 
-### Repository Size Limits
-
-With 48GB RAM, you can comfortably process:
+### Computer Memory Requriements For Repository
 
 | Repository Type | Compressed Size | Files | Memory Usage |
 |----------------|-----------------|-------|--------------|
@@ -336,7 +393,7 @@ Access at http://localhost:3001 (admin/admin):
 
 ## Troubleshooting
 
-### 🚨 **Most Common Issue: Code Changes Not Appearing**
+### **Most Common Issue: Code Changes Not Appearing**
 
 **Problem**: You make code changes but they don't appear when testing (old behavior persists).
 
@@ -348,13 +405,6 @@ Access at http://localhost:3001 (admin/admin):
 make up-fresh
 ```
 
-**When to use `make up-fresh`:**
-- After making code changes that don't appear in testing
-- When debug logs or new functionality isn't working
-- When you see unexpected behavior that doesn't match your code
-- After git pulls with significant changes
-
-**Note**: `make up-fresh` takes 5-10 minutes but ensures you're running the latest code.
 
 ### Other Common Issues
 
@@ -370,12 +420,7 @@ make up
 - Check API key quota: OpenAI embeddings API limits
 - View logs: `docker-compose -f deploy/docker-compose.dev.yml logs -f apiserver`
 
-**"Git clone failed: Upload failed: Not Found":**
-- Use the new `/v1/upload/git` endpoint (not the old streaming endpoint)
-- Ensure repository URL is publicly accessible
-- Check network connectivity from Docker container
-
-**UI shows empty repository list:**
+**How to check if saving to Weaviate was done correctly:**
 - Wait for repository processing to complete (STATE_READY)
 - Check upload status via API
 - Verify Weaviate is running: `curl http://localhost:8082/v1/.well-known/ready`
@@ -383,7 +428,6 @@ make up
 **Chat interface doesn't enable after repository upload:**
 - Ensure repository status is STATE_READY (not PENDING/PROCESSING)
 - Check browser console for JavaScript errors
-- Clear browser cache and reload the page
 - Verify WebSocket connection: `curl -I -H "Upgrade: websocket" -H "Connection: upgrade" ws://localhost:3000/v1/chat/repo-123/stream`
 
 **WebSocket chat connection fails:**
@@ -439,31 +483,50 @@ docker exec repo-context-redis redis-cli get "upload:status:my-upload-id"
 - **CPU**: 2+ cores
 - **Network**: Internet access for API calls
 
-### Recommended (48GB RAM)
-- **Concurrent repositories**: 5-10
-- **Repository size**: Up to 4GB compressed
-- **Processing time**: 5-15 minutes per repository
-- **Query response**: 1-3 seconds
-
 ## API Reference
 
-### HTTP Endpoints
+### 📡 HTTP Endpoints (gRPC-Gateway)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/v1/upload/git` | Upload Git repository |
-| `GET` | `/v1/upload/{id}/status` | Check upload status |
-| `GET` | `/v1/repositories` | List repositories |
-| `GET` | `/v1/repositories/{id}` | Get repository details |
-| `DELETE` | `/v1/repositories/{id}` | Delete repository |
-| `GET` | `/health` | Health check |
+| Method | Endpoint | gRPC Service | gRPC Method | Description |
+|--------|----------|-------------|-------------|-------------|
+| `POST` | `/v1/upload/git` | `UploadService` | `UploadGitRepository` | **🔄 Ingestion Pipeline Entry** |
+| `GET` | `/v1/upload/{id}/status?tenant_id=local` | `UploadService` | `GetUploadStatus` | **📊 Monitor Processing Pipeline** |
+| `GET` | `/v1/repositories?tenant_id=local` | `RepositoryService` | `ListRepositories` | **📚 Multi-tenant Repository Catalog** |
+| `GET` | `/v1/repositories/{id}?tenant_id=local` | `RepositoryService` | `GetRepository` | **🔍 Repository Metadata & Stats** |
+| `DELETE` | `/v1/repositories/{id}?tenant_id=local` | `RepositoryService` | `DeleteRepository` | **🗑️ Cleanup Repository & Vectors** |
+| `GET` | `/health` | `HealthService` | `Check` | **🏥 System Health & Component Status** |
+| `GET` | `/ping` | `HealthService` | `Ping` | **🏓 Simple Connectivity Test** |
 
-### gRPC Services
+### 🔌 WebSocket Endpoints (gRPC Bridge)
 
-- `UploadService` - Repository uploads
-- `RepositoryService` - Repository management
-- `ChatService` - Bidirectional streaming chat with dual search and LLM composition
-- `HealthService` - Health checks
+| Method | Endpoint | gRPC Service | gRPC Method | Description |
+|--------|----------|-------------|-------------|-------------|
+| `GET` | `/v1/chat/{repository_id}/stream` | `ChatService` | `ChatWithRepository` | **💬 Real-time Q&A with Dual Search** |
+
+**WebSocket Message Flow:**
+1. **Start Session**: `{"start": {"repository_id": "...", "tenant_id": "local", "options": {...}}}`
+2. **Send Query**: `{"chat_message": {"query": "...", "session_id": "..."}}`
+3. **Stream Response**: Search hits → LLM composition → Final response
+4. **Cancel/Close**: `{"cancel": {"session_id": "..."}}`
+
+### 🏗️ gRPC Services (Port 9090)
+
+#### **UploadService** - Repository Ingestion Pipeline
+- **`UploadGitRepository`** → HTTP: `POST /v1/upload/git`
+- **`GetUploadStatus`** → HTTP: `GET /v1/upload/{id}/status`
+- **`UploadRepository`** → gRPC-only (streaming file uploads)
+
+#### **RepositoryService** - Repository Management
+- **`ListRepositories`** → HTTP: `GET /v1/repositories`
+- **`GetRepository`** → HTTP: `GET /v1/repositories/{id}`
+- **`DeleteRepository`** → HTTP: `DELETE /v1/repositories/{id}`
+
+#### **ChatService** - Real-time Q&A System
+- **`ChatWithRepository`** → WebSocket: `/v1/chat/{id}/stream` (bidirectional streaming)
+
+#### **HealthService** - System Monitoring
+- **`Check`** → HTTP: `GET /health`
+- **`Ping`** → HTTP: `GET /ping`
 
 Use `grpcurl` to explore:
 ```bash
@@ -472,16 +535,134 @@ grpcurl -plaintext localhost:9090 describe repocontext.v1.UploadService
 grpcurl -plaintext localhost:9090 describe repocontext.v1.ChatService
 ```
 
-### WebSocket Endpoints
+---
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/v1/chat/{repository_id}/stream` | WebSocket chat stream with repository |
+## 🔄 Control Flow Diagrams
 
-**WebSocket Message Protocol:**
-- **Start**: Initialize chat session with repository
-- **Chat Message**: Send query and receive streaming response
-- **Cancel**: Cancel ongoing chat session
+### 1. **Repository Ingestion Pipeline**: HTTP → gRPC → Processing
+
+```
+HTTP Request: POST /v1/upload/git
+    ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ HTTP Server (cmd/apiserver/main.go:238)                        │
+│ • gRPC-Gateway: runtime.NewServeMux()                          │
+│ • Route: RegisterUploadServiceHandlerFromEndpoint()            │
+└─────────────────┬───────────────────────────────────────────────┘
+                  ↓ gRPC Call
+┌─────────────────────────────────────────────────────────────────┐
+│ gRPC UploadService (internal/api/upload.go:45)                 │
+│ • Method: UploadGitRepository()                                 │
+│ • Validation: tenant_id, idempotency_key, git_repository       │
+│ • Cache Check: Redis idempotency lookup                        │
+└─────────────────┬───────────────────────────────────────────────┘
+                  ↓ Async Processing
+┌─────────────────────────────────────────────────────────────────┐
+│ Ingestion Pipeline (internal/ingest/inline.go:89)              │
+│ • STATE_PENDING → STATE_EXTRACTING                             │
+│   - ProcessGitRepository() → git clone --depth=1               │
+│ • STATE_EXTRACTING → STATE_CHUNKING                            │
+│   - chunkFiles() → Intelligent language-specific chunking     │
+│ • STATE_CHUNKING → STATE_EMBEDDING                             │
+│   - OpenAI text-embedding-ada-002 API (batch processing)      │
+│ • STATE_EMBEDDING → STATE_INDEXING                             │
+│   - Weaviate collection creation & vector storage             │
+│ • STATE_INDEXING → STATE_READY                                 │
+│   - Redis status update & cache prefill                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Function Call Chain:**
+1. `cmd/apiserver/main.go:238` → `RegisterUploadServiceHandlerFromEndpoint()`
+2. `internal/api/upload.go:45` → `UploadGitRepository()`
+3. `internal/api/upload.go:78` → `cache.SetUploadStatus()`
+4. `internal/api/upload.go:85` → `ingestProvider.ProcessRepository()` (async)
+5. `internal/ingest/inline.go:89` → `ProcessGitRepository()`
+6. `internal/ingest/inline.go:156` → `chunkFiles()`
+7. `internal/ingest/inline.go:290` → `generateEmbeddings()`
+8. `internal/ingest/inline.go:345` → `indexChunks()`
+
+### 2. **Query Pipeline**: WebSocket → gRPC → Dual Search → LLM
+
+```
+WebSocket: ws://localhost:3000/v1/chat/{repo_id}/stream
+    ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ WebSocket Bridge (internal/api/websocket.go:89)                │
+│ • Connection Management: Gorilla WebSocket                     │
+│ • Protocol Translation: JSON ↔ Protobuf                       │
+│ • Route: /v1/chat/{repository_id}/stream                       │
+└─────────────────┬───────────────────────────────────────────────┘
+                  ↓ gRPC Stream
+┌─────────────────────────────────────────────────────────────────┐
+│ gRPC ChatService (internal/api/chat.go:89)                     │
+│ • Method: ChatWithRepository() - Bidirectional Streaming       │
+│ • Session Management: concurrent goroutine per connection      │
+│ • Message Types: ChatStart, ChatMessage, ChatCancel            │
+└─────────────────┬───────────────────────────────────────────────┘
+                  ↓ Parallel Search
+┌─────────────────────────────────────────────────────────────────┐
+│ Dual Search Engine (internal/api/chat.go:245)                  │
+│                                                                 │
+│ ┌─────────────────────┐    ┌─────────────────────────────────┐ │
+│ │ Lexical Search      │    │ Semantic Search                 │ │
+│ │ (ripgrep)           │    │ (Weaviate + OpenAI)            │ │
+│ │                     │    │                                 │ │
+│ │ • ripgrep -i regex  │    │ • generateQueryEmbedding()      │ │
+│ │ • File filtering    │    │ • Weaviate nearText query       │ │
+│ │ • Fuzzy matching    │    │ • Vector similarity search     │ │
+│ │ • Context lines     │    │ • Cosine distance ranking      │ │
+│ └─────────────────────┘    └─────────────────────────────────┘ │
+│           ↓                             ↓                      │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Result Merger (internal/query/merge.go:45)                 │ │
+│ │ • Combine lexical + semantic results                       │ │
+│ │ • Score normalization & ranking                            │ │
+│ │ • Deduplication by file path + line range                  │ │
+│ │ • Early hit streaming (EARLY phase)                        │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+└─────────────────┬───────────────────────────────────────────────┘
+                  ↓ LLM Composition
+┌─────────────────────────────────────────────────────────────────┐
+│ DeepSeek LLM Composition (internal/composer/deepseek.go)    │
+│ • Context Assembly: Top-ranked code chunks                     │
+│ • Prompt Engineering: Query + code context + instructions      │
+│ • Token Streaming: Real-time response generation               │
+│ • Citation Generation: File paths + line numbers               │
+└─────────────────┬───────────────────────────────────────────────┘
+                  ↓ Response Stream
+┌─────────────────────────────────────────────────────────────────┐
+│ Streaming Response Pipeline                                     │
+│ 1. search_started    → Query acknowledgment                     │
+│ 2. search_hit        → Early search results (EARLY phase)      │
+│ 3. composition_started → LLM context summary                    │
+│ 4. composition_token   → Real-time token streaming              │
+│ 5. composition_complete → Final response with citations         │
+│ 6. complete           → Session cleanup                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Function Call Chain:**
+1. `internal/api/websocket.go:89` → `handleWebSocketConnection()`
+2. `internal/api/websocket.go:156` → `ChatWithRepository()` (gRPC stream)
+3. `internal/api/chat.go:89` → `ChatWithRepository()`
+4. `internal/api/chat.go:245` → `performDualSearch()` (parallel goroutines)
+5. `internal/query/lexical_rg.go:55` → `SearchLexical()` (ripgrep)
+6. `internal/query/semantic_weaviate.go:67` → `SearchSemantic()` (Weaviate)
+7. `internal/query/merge.go:45` → `MergeResults()`
+8. `internal/composer/deepseek.go:78` → `ComposeResponse()` (streaming)
+
+### 3. **Key gRPC ↔ Implementation Mappings**
+
+| **HTTP Route** | **gRPC Service.Method** | **Implementation File** | **Core Function** |
+|---------------|------------------------|------------------------|------------------|
+| `POST /v1/upload/git` | `UploadService.UploadGitRepository` | `internal/api/upload.go` | `UploadGitRepository()` |
+| `GET /v1/upload/{id}/status` | `UploadService.GetUploadStatus` | `internal/api/upload.go` | `GetUploadStatus()` |
+| `GET /v1/repositories` | `RepositoryService.ListRepositories` | `internal/api/repository.go` | `ListRepositories()` |
+| `GET /v1/repositories/{id}` | `RepositoryService.GetRepository` | `internal/api/repository.go` | `GetRepository()` |
+| `DELETE /v1/repositories/{id}` | `RepositoryService.DeleteRepository` | `internal/api/repository.go` | `DeleteRepository()` |
+| `GET /health` | `HealthService.Check` | `internal/api/health.go` | `Check()` |
+| `ws://.../v1/chat/{id}/stream` | `ChatService.ChatWithRepository` | `internal/api/chat.go` + `websocket.go` | `ChatWithRepository()` |
 
 ## Deployment Notes
 
@@ -489,34 +670,3 @@ grpcurl -plaintext localhost:9090 describe repocontext.v1.ChatService
 - **Base**: Alpine Linux with Git, ripgrep, and Go runtime
 - **Size**: ~100MB compressed
 - **Security**: Runs as non-root user
-
-### Data Persistence
-- **Weaviate**: Stores vector embeddings (persistent volume)
-- **Redis**: Caches metadata and search results (ephemeral)
-- **Repositories**: Stored in container (ephemeral in dev)
-
-### Production Considerations
-- Use external Redis for caching
-- Consider managed Weaviate for scaling
-- Enable authentication and rate limiting
-- Set up proper backup strategies
-- Monitor API key usage and costs
-
-## License
-
-[Add your license here]
-
-## Contributing
-
-1. Fork the repository
-2. Run `make setup` for first-time development setup
-3. Make changes and add tests
-4. Run `make lint && make test`
-5. Submit a pull request
-
-## Support
-
-- **Issues**: GitHub Issues
-- **Logs**: `docker-compose logs`
-- **Metrics**: http://localhost:9091
-- **Tracing**: http://localhost:16686
