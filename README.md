@@ -2,6 +2,15 @@
 
 Go gRPC orchestration and coding agent service where you can upload your repository and get an AI powered chatbot that understsands your code using dual search backends (lexical + semantic) and LLM composition.
 
+Below shows demonstration of the project. I uploaded a project of mine, by clicking on "Clone Repository"
+Then asked it questions such as "How is auth handled" to generate useful responses.
+
+https://github.com/jinahn130/jin-social-media
+
+https://jin-social.web.app/
+
+
+
 ![alt text](/repo-context-service/images/image.png)
 ![alt text](/repo-context-service/images/image4.png)
 ## Architectural Diagram and Key Components
